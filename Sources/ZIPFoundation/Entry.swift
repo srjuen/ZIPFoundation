@@ -119,12 +119,8 @@ public struct Entry: Equatable {
     }
     /// The `path` of the receiver within a ZIP `Archive`.
     public var path: String {
-        let dosLatinUS = 0x400
-        let dosLatinUSEncoding = CFStringEncoding(dosLatinUS)
-        let dosLatinUSStringEncoding = CFStringConvertEncodingToNSStringEncoding(dosLatinUSEncoding)
-        let codepage437 = String.Encoding(rawValue: dosLatinUSStringEncoding)
-        let encoding = self.centralDirectoryStructure.usesUTF8PathEncoding ? .utf8 : codepage437
-        return self.path(using: encoding)
+        let enc = self.centralDirectoryStructure.fileNameData.stringEncoding
+        return self.path(using: enc!)
     }
     /// The file attributes of the receiver as key/value pairs.
     ///
@@ -315,5 +311,40 @@ extension Entry.CentralDirectoryStructure {
             return offset
         }
         return UInt64(relativeOffsetOfLocalHeader)
+    }
+}
+
+private extension Data {
+    var stringEncoding: String.Encoding? {
+        var nsString: NSString?
+        var flag = UnsafeMutablePointer<ObjCBool>.allocate(capacity: 1)
+        flag[0] = false
+        
+        let encodings = [
+            String.Encoding(rawValue: CFStringConvertEncodingToNSStringEncoding(0x0422)).rawValue,
+            String.Encoding(rawValue: CFStringConvertEncodingToNSStringEncoding(0x0920)).rawValue,
+            String.Encoding(rawValue: CFStringConvertEncodingToNSStringEncoding(0x0930)).rawValue,
+            String.Encoding(rawValue: CFStringConvertEncodingToNSStringEncoding(0x0931)).rawValue,
+            String.Encoding(rawValue: CFStringConvertEncodingToNSStringEncoding(0x0400)).rawValue,
+            String.Encoding.utf8.rawValue,
+            String.Encoding.utf16.rawValue,
+            String.Encoding.windowsCP1250.rawValue,
+            String.Encoding.windowsCP1251.rawValue,
+            String.Encoding.windowsCP1252.rawValue,
+            String.Encoding.windowsCP1253.rawValue,
+            String.Encoding.windowsCP1254.rawValue,
+            String.Encoding.isoLatin1.rawValue,
+            String.Encoding.isoLatin2.rawValue,
+            String.Encoding.ascii.rawValue,
+        ]
+        
+        guard case let rawValue = NSString.stringEncoding(
+            for: self,
+            encodingOptions: [StringEncodingDetectionOptionsKey.suggestedEncodingsKey: encodings],
+            convertedString: &nsString,
+            usedLossyConversion: flag
+        ), rawValue != 0 else { return nil }
+        
+        return .init(rawValue: rawValue)
     }
 }
